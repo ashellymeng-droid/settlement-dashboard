@@ -15,15 +15,14 @@ if 'authenticated' not in st.session_state:
     st.session_state.authenticated = False
 
 if not st.session_state.authenticated:
-    # Get password from secrets (Cloud) or env (local)
+    # Get password: secrets (Cloud) > env (local) > default
     import os
     APP_PASSWORD = os.getenv("APP_PASSWORD", None)
-    # Streamlit Cloud fallback
-    try:
-        if not APP_PASSWORD:
-            APP_PASSWORD = st.secrets.get("APP_PASSWORD", "xiaolaba")
-    except:
-        APP_PASSWORD = "xiaolaba"
+    if not APP_PASSWORD:
+        try:
+            APP_PASSWORD = st.secrets.get("APP_PASSWORD", "wangyiyun123")
+        except:
+            APP_PASSWORD = "wangyiyun123"
 
     st.markdown("<br><br>", unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 1, 1])
