@@ -9,35 +9,7 @@ st.set_page_config(
 )
 
 # ============================================================
-# Password gate
-# ============================================================
-if 'authenticated' not in st.session_state:
-    st.session_state.authenticated = False
-
-if not st.session_state.authenticated:
-    # Get password: secrets (Cloud) > env (local) > default
-    import os
-    APP_PASSWORD = os.getenv("APP_PASSWORD", None)
-    if not APP_PASSWORD:
-        try:
-            APP_PASSWORD = st.secrets.get("APP_PASSWORD", "wangyiyun123")
-        except:
-            APP_PASSWORD = "wangyiyun123"
-
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        st.markdown("### 🔐 结算看板")
-        pwd = st.text_input("请输入访问密码", type="password", placeholder="输入密码后回车")
-        if pwd == APP_PASSWORD:
-            st.session_state.authenticated = True
-            st.rerun()
-        elif pwd:
-            st.error("密码错误")
-    st.stop()
-
-# ============================================================
-# Main page
+# Main page (no password required)
 # ============================================================
 st.sidebar.markdown("""
 <div style='text-align: center; padding: 20px 0;'>

@@ -4,9 +4,6 @@ import pandas as pd
 import sys, os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.auth import check_auth
-check_auth()
-
 from settlement_engine import SettlementEngine
 
 st.title("🔍 达人结算明细查询")
