@@ -94,6 +94,10 @@ class SettlementResult:
     stats: Dict = field(default_factory=dict)
     raw_data: pd.DataFrame = None
     settled_posts: pd.DataFrame = None
+    # 未分发网易云但本应结算的达人
+    no_netease_totals: Dict[str, Dict] = field(default_factory=dict)
+    no_netease_details: Dict[str, CreatorDetail] = field(default_factory=dict)
+    no_netease_posts: pd.DataFrame = None
 
 
 class SettlementEngine:
@@ -136,38 +140,32 @@ class SettlementEngine:
         df.loc[:, cfg.content_tag_field] = df[cfg.content_tag_field].fillna('未分类')
         df.loc[:, '_play'] = df[cfg.play_field].fillna(df[cfg.play_fallback_field])
 
+        # 标记有网易云分发的创作匠
+        netease_creators = set(df.loc[
+            df[cfg.platform_field] == cfg.netease_platform,
+            cfg.creator_id_field
+        ].unique())
+        df.loc[:, '_has_netease'] = df[cfg.creator_id_field].isin(netease_creators)
+
         self.result.raw_data = df
         self.result.stats['total_rows'] = len(df)
         self.result.stats['netease_rows'] = int((df[cfg.platform_field] == cfg.netease_platform).sum())
+        self.result.stats['netease_creators'] = len(netease_creators)
 
         return df
 
-    def calculate(self, df: Optional[pd.DataFrame] = None) -> SettlementResult:
-        """执行结算计算"""
-        if df is None:
-            df = self.result.raw_data
-        if df is None:
-            raise ValueError("请先调用 load_data() 加载底表")
-
-        cfg = self.config
-        rules = SETTLEMENT_RULES
-
-        # 过滤网易云 + 可结算
-        settle = df[
-            (df[cfg.platform_field] != cfg.netease_platform) &
-            (df['_can_settle'])
-        ].copy()
-
+    def _settle_creators(self, posts_df, cfg, rules):
+        """对一组稿件执行结算计算，返回 (creator_totals, creator_details)"""
         creator_totals = {}
         creator_details = {}
 
-        for cid, group in settle.groupby(cfg.creator_id_field):
+        for cid, group in posts_df.groupby(cfg.creator_id_field):
             name = group[cfg.creator_name_field].iloc[0]
             total = 0.0
             platforms = {}
             breakdown = []
 
-            # --- 小红书 ---
+            # 小红书
             xhs = group[group[cfg.platform_field] == '小红书']
             if len(xhs) > 0:
                 xhs_total = 0.0
@@ -178,36 +176,26 @@ class SettlementEngine:
                     else:
                         known_tags = [rules['小红书'][k]['content_tag'] for k in ['真人', '图文']]
                         posts = xhs[~xhs[cfg.content_tag_field].isin(known_tags)]
-
                     if len(posts) > 0:
-                        sub_breakdown = self._calc_xhs(
-                            posts, ct_rules['cumulative'],
-                            ct_rules['boom'], ct_rules['boom_threshold'],
-                            cfg, label=f"小红书-{ct_name}"
-                        )
-                        if sub_breakdown['小计'] > 0:
-                            xhs_total += sub_breakdown['小计']
-                            breakdown.append(sub_breakdown)
+                        sub = self._calc_xhs(posts, ct_rules['cumulative'], ct_rules['boom'],
+                                            ct_rules['boom_threshold'], cfg, label=f"小红书-{ct_name}")
+                        if sub['小计'] > 0:
+                            xhs_total += sub['小计']
+                            breakdown.append(sub)
                 if xhs_total > 0:
                     platforms['小红书'] = xhs_total
                     total += xhs_total
 
-            # --- 抖音 ---
+            # 抖音
             dy = group[group[cfg.platform_field] == '抖音']
             if len(dy) > 0:
                 dy_total = 0.0
                 for ct_name in ['真人', '非真人']:
                     tag = rules['小红书']['真人']['content_tag'] if ct_name == '真人' else None
-                    if tag:
-                        posts = dy[dy[cfg.content_tag_field] == tag]
-                    else:
-                        posts = dy[dy[cfg.content_tag_field] != rules['小红书']['真人']['content_tag']]
+                    posts = dy[dy[cfg.content_tag_field] == tag] if tag else dy[dy[cfg.content_tag_field] != rules['小红书']['真人']['content_tag']]
                     if len(posts) > 0:
-                        sub = self._calc_per_post(
-                            posts, rules['抖音'][ct_name],
-                            rules['抖音']['max_posts'], cfg,
-                            label=f"抖音-{ct_name}"
-                        )
+                        sub = self._calc_per_post(posts, rules['抖音'][ct_name],
+                                                 rules['抖音']['max_posts'], cfg, label=f"抖音-{ct_name}")
                         if sub['小计'] > 0:
                             dy_total += sub['小计']
                             breakdown.append(sub)
@@ -215,22 +203,16 @@ class SettlementEngine:
                     platforms['抖音'] = dy_total
                     total += dy_total
 
-            # --- 快手 ---
+            # 快手
             ks = group[group[cfg.platform_field] == '快手']
             if len(ks) > 0:
                 ks_total = 0.0
                 for ct_name in ['真人', '非真人']:
                     tag = rules['小红书']['真人']['content_tag'] if ct_name == '真人' else None
-                    if tag:
-                        posts = ks[ks[cfg.content_tag_field] == tag]
-                    else:
-                        posts = ks[ks[cfg.content_tag_field] != tag]
+                    posts = ks[ks[cfg.content_tag_field] == tag] if tag else ks[ks[cfg.content_tag_field] != rules['小红书']['真人']['content_tag']]
                     if len(posts) > 0:
-                        sub = self._calc_per_post(
-                            posts, rules['快手'][ct_name],
-                            rules['快手']['max_posts'], cfg,
-                            label=f"快手-{ct_name}"
-                        )
+                        sub = self._calc_per_post(posts, rules['快手'][ct_name],
+                                                 rules['快手']['max_posts'], cfg, label=f"快手-{ct_name}")
                         if sub['小计'] > 0:
                             ks_total += sub['小计']
                             breakdown.append(sub)
@@ -238,7 +220,7 @@ class SettlementEngine:
                     platforms['快手'] = ks_total
                     total += ks_total
 
-            # --- B站/视频号 ---
+            # B站/视频号
             bili = group[group[cfg.platform_field].isin(['B站', '微信视频号'])]
             if len(bili) > 0:
                 sub = self._calc_bili(bili, rules['B站/视频号']['tiers'], cfg)
@@ -250,24 +232,44 @@ class SettlementEngine:
             if total > 0:
                 capped = min(total, cfg.cap_per_person)
                 creator_totals[cid] = {
-                    '昵称': name,
-                    'total': capped,
-                    'before': total,
-                    **platforms,
+                    '昵称': name, 'total': capped, 'before': total, **platforms,
                 }
                 creator_details[cid] = CreatorDetail(
-                    creator_id=cid,
-                    name=name,
-                    total=capped,
-                    before_cap=total,
+                    creator_id=cid, name=name, total=capped, before_cap=total,
                     is_capped=total > cfg.cap_per_person,
-                    platforms=platforms,
-                    breakdown=breakdown,
+                    platforms=platforms, breakdown=breakdown,
                 )
 
-        # 统计
-        settled_all = settle[settle[cfg.creator_id_field].isin(creator_totals.keys())]
-        guoshen_pool = settle
+        return creator_totals, creator_details
+
+    def calculate(self, df: Optional[pd.DataFrame] = None) -> SettlementResult:
+        """执行结算计算"""
+        if df is None:
+            df = self.result.raw_data
+        if df is None:
+            raise ValueError("请先调用 load_data() 加载底表")
+
+        cfg = self.config
+        rules = SETTLEMENT_RULES
+
+        # 过滤非网易云 + 可结算
+        valid_pool = df[
+            (df[cfg.platform_field] != cfg.netease_platform) &
+            (df['_can_settle'])
+        ].copy()
+
+        # 按网易云分发条件拆分为两组
+        settle = valid_pool[valid_pool['_has_netease']].copy()
+        no_netease = valid_pool[~valid_pool['_has_netease']].copy()
+
+        # 结算有网易云的达人
+        creator_totals, creator_details = self._settle_creators(settle, cfg, rules)
+
+        # 计算无网易云达人的本应结算金额
+        no_netease_totals, no_netease_details = self._settle_creators(no_netease, cfg, rules)
+
+        # 统计（基于全部过审稿件池）
+        guoshen_pool = valid_pool
         xhs_guoshen = len(guoshen_pool[guoshen_pool[cfg.platform_field] == '小红书'])
         boom_1000 = int((guoshen_pool[cfg.like_field] >= 1000).sum())
         total_non_netease = len(df[df[cfg.platform_field] != cfg.netease_platform])
@@ -304,8 +306,17 @@ class SettlementEngine:
 
         self.result.creator_totals = creator_totals
         self.result.creator_details = creator_details
+        self.result.no_netease_totals = no_netease_totals
+        self.result.no_netease_details = no_netease_details
+        self.result.no_netease_posts = no_netease
         self.result.stats.update(stats)
-        self.result.settled_posts = settled_all
+        self.result.settled_posts = settle
+
+        # 未分发统计
+        self.result.stats['no_netease_count'] = len(no_netease_totals)
+        self.result.stats['no_netease_amount'] = sum(
+            c['total'] for c in no_netease_totals.values()
+        )
 
         return self.result
 
@@ -548,6 +559,35 @@ class SettlementEngine:
 
         for ci in range(1, 8):
             ws.column_dimensions[get_column_letter(ci)].width = 18
+
+        # Sheet 2: 未分发网易云达人
+        if result.no_netease_totals:
+            ws2 = wb.create_sheet('未分发网易云达人')
+            ws2.merge_cells('A1:F1')
+            ws2.cell(row=1, column=1, value='未分发网易云音乐达人 — 本应结算金额（因不满足分发条件不予结算）').font = sf
+            for c in range(1, 7): ws2.cell(row=1, column=c).fill = sfil
+
+            row = 3
+            for i, h in enumerate(['创作匠ID', '昵称', '投稿平台', '合格稿件数', '本应结算金额', '封顶前金额']):
+                wc(ws2, row, 1+i, h, font=bf,
+                   fill=PatternFill(start_color='FFC000', end_color='FFC000', fill_type='solid'))
+            row += 1
+
+            sorted_nn = sorted(result.no_netease_totals.items(), key=lambda x: x[1]['total'], reverse=True)
+            for cid, data in sorted_nn:
+                platforms = list(data.keys()) if isinstance(data, dict) else []
+                wc(ws2, row, 1, cid)
+                wc(ws2, row, 2, data['昵称'])
+                wc(ws2, row, 3, ', '.join([k for k in data.keys() if k not in ('昵称', 'total', 'before')]))
+                # count posts
+                nn_count = len(result.no_netease_posts[result.no_netease_posts[self.config.creator_id_field] == cid])
+                wc(ws2, row, 4, nn_count)
+                wc(ws2, row, 5, data['total'], fmt=mf, font=bf)
+                wc(ws2, row, 6, data['before'], fmt=mf)
+                row += 1
+
+            for ci, w in enumerate([18, 18, 26, 12, 16, 16]):
+                ws2.column_dimensions[get_column_letter(ci+1)].width = w
 
         wb.save(output_path)
         return output_path
