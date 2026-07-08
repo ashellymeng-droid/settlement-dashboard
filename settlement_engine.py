@@ -493,7 +493,7 @@ class SettlementEngine:
         tb = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
         ca = Alignment(horizontal='center', vertical='center')
         la = Alignment(horizontal='left', vertical='center', wrap_text=True)
-        mf = '#,##0'
+        mf = '0'
 
         def wc(ws, r, c, v, font=nf, fmt=None, fill=None, align=ca):
             cell = ws.cell(row=r, column=c, value=v)
