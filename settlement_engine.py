@@ -593,3 +593,13 @@ class SettlementEngine:
         return output_path
 
 
+def quick_settle(data_path: str, output_path: Optional[str] = None, cap: int = 10000) -> SettlementResult:
+    """一键结算：加载底表 → 计算 → 返回结果"""
+    engine = SettlementEngine(SettlementConfig(cap_per_person=cap))
+    engine.load_data(data_path)
+    result = engine.calculate()
+    if output_path:
+        engine.to_excel(output_path)
+    return result
+
+
