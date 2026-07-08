@@ -562,16 +562,45 @@ class SettlementEngine:
                 row += 1
             for ci in range(1, 7): ws2.column_dimensions[get_column_letter(ci)].width = 22
 
-        # Sheet 3: 底表
+        # Sheet 3: 底表 (灰底标注不可结算行)
         if result.raw_data is not None:
             ws3 = wb.create_sheet('底表')
-            for ci, cn in enumerate(result.raw_data.columns): wc(ws3, 1, ci+1, str(cn), font=bf)
+            grey_fill = PatternFill(start_color='D9D9D9', end_color='D9D9D9', fill_type='solid')
+            rfil = PatternFill(start_color='FF9999', end_color='FF9999', fill_type='solid')
+
+            # Headers + extra "备注" column
+            cols = list(result.raw_data.columns) + ['结算备注']
+            for ci, cn in enumerate(cols):
+                wc(ws3, 1, ci+1, str(cn), font=bf)
+
             for ri in range(min(len(result.raw_data), 2000)):
+                row_data = result.raw_data.iloc[ri]
+                # Determine if this row is excluded
+                is_ne = row_data.get(cfg.platform_field) == cfg.netease_platform
+                is_ok = row_data.get('_can_settle', True)
+                excluded = not is_ne and not is_ok
+
+                reason = ''
+                if not is_ne:
+                    if str(row_data.get(cfg.review_field, '')) != '审核通过':
+                        reason = '审核不通过'
+                    elif str(row_data.get(cfg.access_field, '')) != '是':
+                        reason = '不可访问'
+                    if reason:
+                        reason = f'不参与结算({reason})'
+
+                fill = grey_fill if excluded else None
                 for ci in range(len(result.raw_data.columns)):
-                    val = result.raw_data.iloc[ri, ci]
+                    val = row_data.iloc[ci] if hasattr(row_data, 'iloc') else row_data[result.raw_data.columns[ci]]
                     if pd.isna(val): continue
-                    try: wc(ws3, ri+2, ci+1, val)
+                    try: wc(ws3, ri+2, ci+1, val, fill=fill)
                     except: pass
+                # Add备注 in last column
+                if reason:
+                    wc(ws3, ri+2, len(cols), reason, fill=grey_fill, font=Font(name='微软雅黑', size=10, color='FF0000'))
+
+            for ci in range(1, len(cols)+1):
+                ws3.column_dimensions[get_column_letter(ci)].width = 14
 
         # Sheet 4: 未分发网易云
         if result.no_netease_totals:
