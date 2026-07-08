@@ -133,7 +133,7 @@ if st.session_state.result is not None:
     total_ppl = df_raw[df_raw['发布平台'] != '网易云音乐']['创作匠/易闪ID'].nunique()
     cpm_v = s['grand_total'] / est_e * 1000 if est_e > 0 else 0
     cpe_v = s['grand_total'] / total_int if total_int > 0 else 0
-    boom_r = boom_1k / xhs_gs if xhs_gs > 0 else 0
+    boom_r = boom_1k / len(guoshen) if len(guoshen) > 0 else 0
     award_r = awarded_p / len(guoshen) if len(guoshen) > 0 else 0
 
     def _w(n):
@@ -151,7 +151,7 @@ if st.session_state.result is not None:
 • 投稿人次：{total_ppl}
 • 播放量：{_w(tp)}（小红书{_w(int(xhs_p if pd.notna(xhs_p) else 0))}阅读+其他平台{_w(int(other_p if pd.notna(other_p) else 0))}播放），预估总曝光{est_e:,.0f}，预估曝光cpm {cpm_v:.2f}
 • 互动量：{_w(total_int)}，CPE {cpe_v:.2f}
-• 过审爆款作品：{boom_1k}条（按千赞标准计算），爆款率 {boom_r:.1%}（爆款率=过审爆款作品数/过审小红书投稿量）
+• 过审爆款作品：{boom_1k}条（按千赞标准计算），爆款率 {boom_r:.1%}（爆款率=过审爆款作品数/过审投稿量）
 • 获奖作品：{awarded_p}条，获奖率 {award_r:.1%}（获奖率=获奖作品数/过审非分发投稿量）
 ```"""
     st.markdown(report)
@@ -167,7 +167,7 @@ if st.session_state.result is not None:
 • 投稿人次：{total_ppl}
 • 播放量：{_w(tp)}（小红书{_w(int(xhs_p if pd.notna(xhs_p) else 0))}阅读+其他平台{_w(int(other_p if pd.notna(other_p) else 0))}播放），预估总曝光{est_e:,.0f}，预估曝光cpm {cpm_v:.2f}
 • 互动量：{_w(total_int)}，CPE {cpe_v:.2f}
-• 过审爆款作品：{boom_1k}条（按千赞标准计算），爆款率 {boom_r:.1%}（爆款率=过审爆款作品数/过审小红书投稿量）
+• 过审爆款作品：{boom_1k}条（按千赞标准计算），爆款率 {boom_r:.1%}（爆款率=过审爆款作品数/过审投稿量）
 • 获奖作品：{awarded_p}条，获奖率 {award_r:.1%}（获奖率=获奖作品数/过审非分发投稿量）"""
     st.download_button("📋 复制报告文本", report_plain, file_name=f"歌单{month}结算报告.txt", mime="text/plain")
 

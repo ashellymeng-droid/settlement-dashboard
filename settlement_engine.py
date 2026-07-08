@@ -301,7 +301,7 @@ class SettlementEngine:
             'estimated_exposure': est_exposure,
             'total_interact': total_interact,
             'guoshen_rate': len(guoshen_pool) / total_non_netease if total_non_netease > 0 else 0,
-            'boom_rate': boom_1000 / xhs_guoshen if xhs_guoshen > 0 else 0,
+            'boom_rate': boom_1000 / len(guoshen_pool) if len(guoshen_pool) > 0 else 0,
         }
 
         self.result.creator_totals = creator_totals
