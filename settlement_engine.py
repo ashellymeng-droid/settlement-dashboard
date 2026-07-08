@@ -476,20 +476,21 @@ class SettlementEngine:
             ),
         }
 
-    def to_excel(self, output_path: str):
-        """导出结算结果为 Excel"""
+    def to_excel(self, output_path: str, include_details: bool = True):
+        """导出结算结果为 Excel (v4)"""
         from openpyxl import Workbook
         from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
         from openpyxl.utils import get_column_letter
+        import pandas as pd
 
         result = self.result
+        cfg = self.config
         wb = Workbook()
-        nf = Font(name='微软雅黑', size=10)
-        bf = Font(name='微软雅黑', bold=True, size=10)
+        nf = Font(name='微软雅黑', size=10); bf = Font(name='微软雅黑', bold=True, size=10)
         sf = Font(name='微软雅黑', bold=True, size=12, color='FFFFFF')
         sfil = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-        tb = Border(left=Side(style='thin'), right=Side(style='thin'),
-                     top=Side(style='thin'), bottom=Side(style='thin'))
+        ofil = PatternFill(start_color='FFC000', end_color='FFC000', fill_type='solid')
+        tb = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
         ca = Alignment(horizontal='center', vertical='center')
         la = Alignment(horizontal='left', vertical='center', wrap_text=True)
         mf = '#,##0'
@@ -500,107 +501,95 @@ class SettlementEngine:
             if fmt: cell.number_format = fmt
             if fill: cell.fill = fill
 
-        # Sheet 1: 奖励公示
-        ws = wb.active
-        ws.title = '奖励公示'
-        ws.merge_cells('A1:G1')
-        ws.cell(row=1, column=1, value='创作者结算汇总（已应用1万元封顶）').font = sf
-        for c in range(1, 8): ws.cell(row=1, column=c).fill = sfil
+        def section(ws, r, cs, ce, text):
+            ws.merge_cells(start_row=r, start_column=cs, end_row=r, end_column=ce)
+            for c in range(cs, ce+1): ws.cell(row=r, column=c).fill = sfil; ws.cell(row=r, column=c).border = tb
+            ws.cell(row=r, column=cs).font = sf; ws.cell(row=r, column=cs).value = text
 
-        row = 2
-        for i, h in enumerate(['创作匠ID', '昵称', '小红书', '抖音', '快手', 'B站/视频号', '结算金额']):
-            wc(ws, row, 1+i, h, font=bf)
+        s = result.stats; sorted_c = sorted(result.creator_totals.items(), key=lambda x: x[1]['total'], reverse=True)
+
+        # Sheet 1: 结算明细
+        ws1 = wb.active; ws1.title = '结算明细'
+        ws1.merge_cells('A1:H1')
+        ws1.cell(row=1, column=1, value=f'歌单推广任务结算 — {s["awarded_creators"]}人 \u00a5{s["grand_total"]:,.0f}').font = Font(name='微软雅黑', bold=True, size=14)
+        row = 3; section(ws1, row, 1, 8, '创作者结算汇总'); row += 1
+        for i, h in enumerate(['创作匠ID', '昵称', '小红书', '抖音', '快手', 'B站/视频号', '结算金额', '封顶前']):
+            wc(ws1, row, 1+i, h, font=bf)
         row += 1
-
-        sorted_c = sorted(result.creator_totals.items(), key=lambda x: x[1]['total'], reverse=True)
         for cid, data in sorted_c:
-            wc(ws, row, 1, cid)
-            wc(ws, row, 2, data['昵称'])
+            wc(ws1, row, 1, cid); wc(ws1, row, 2, data['昵称'])
             for pi, p in enumerate(['小红书', '抖音', '快手', 'B站/视频号']):
-                wc(ws, row, 3+pi, data.get(p, 0), fmt=mf)
-            wc(ws, row, 7, data['total'], fmt=mf, font=bf)
-            row += 1
-
-        # Totals
-        wc(ws, row, 1, '', font=bf); wc(ws, row, 2, '合计', font=bf)
+                wc(ws1, row, 3+pi, data.get(p, 0), fmt=mf)
+            wc(ws1, row, 7, data['total'], fmt=mf, font=bf)
+            wc(ws1, row, 8, f"\u00a5{data['before']:,.0f}" + (' \U0001f512封顶' if data['before'] > cfg.cap_per_person else '')); row += 1
+        wc(ws1, row, 1, '', font=bf); wc(ws1, row, 2, '合计', font=bf)
         for pi, p in enumerate(['小红书', '抖音', '快手', 'B站/视频号']):
-            wc(ws, row, 3+pi, sum(d.get(p, 0) for _, d in sorted_c), fmt=mf, font=bf)
-        wc(ws, row, 7, result.stats['grand_total'], fmt=mf, font=bf)
-        row += 3
+            wc(ws1, row, 3+pi, sum(d.get(p, 0) for _, d in sorted_c), fmt=mf, font=bf)
+        wc(ws1, row, 7, s['grand_total'], fmt=mf, font=bf); row += 2
+        section(ws1, row, 1, 8, '整体数据统计'); row += 1
+        cpm = s['grand_total'] / s['estimated_exposure'] * 1000 if s.get('estimated_exposure', 0) > 0 else 0
+        cpe = s['grand_total'] / s['total_interact'] if s.get('total_interact', 0) > 0 else 0
+        for label, value in [('获奖人数', f'{s["awarded_creators"]}人'), ('封顶前/结算总金额', f'\u00a5{s["grand_before"]:,.0f} / \u00a5{s["grand_total"]:,.0f}'), ('封顶人数', f'{s["capped_count"]}人'), ('过审条数', str(s.get("guoshen_count",""))), ('预估曝光cpm/CPE', f'{cpm:.2f} / {cpe:.2f}')]:
+            wc(ws1, row, 1, '', font=bf); ws1.merge_cells(start_row=row, start_column=2, end_row=row, end_column=4)
+            wc(ws1, row, 2, label, font=bf, align=la); ws1.merge_cells(start_row=row, start_column=5, end_row=row, end_column=6)
+            wc(ws1, row, 5, value); row += 1
+        for ci in range(1, 9): ws1.column_dimensions[get_column_letter(ci)].width = 18
 
-        # Stats
-        ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=7)
-        ws.cell(row=row, column=1, value='整体数据统计').font = sf
-        for c in range(1, 8): ws.cell(row=row, column=c).fill = sfil
-        row += 1
-
-        s = result.stats
-        stats_items = [
-            ('获奖人数', s['awarded_creators']),
-            ('封顶前总金额', s['grand_before']),
-            ('封顶后总金额', s['grand_total']),
-            ('封顶人数', s['capped_count']),
-            ('过审条数', s['guoshen_count']),
-            ('过审率', f"{s['guoshen_rate']:.1%}"),
-            ('爆款率', f"{s['boom_rate']:.1%}"),
-            ('预估曝光cpm', f"{s['grand_total'] / s['estimated_exposure'] * 1000:.2f}" if s['estimated_exposure'] > 0 else 'N/A'),
-            ('cpe', f"{s['grand_total'] / s['total_interact']:.2f}" if s['total_interact'] > 0 else 'N/A'),
-        ]
-        for label, value in stats_items:
-            wc(ws, row, 1, '', font=bf)
-            ws.merge_cells(start_row=row, start_column=2, end_row=row, end_column=3)
-            wc(ws, row, 2, label, font=bf, align=la)
-            ws.merge_cells(start_row=row, start_column=4, end_row=row, end_column=5)
-            if isinstance(value, float):
-                wc(ws, row, 4, value, fmt='#,##0', font=bf)
-            else:
-                wc(ws, row, 4, value, font=bf)
-            row += 1
-
-        for ci in range(1, 8):
-            ws.column_dimensions[get_column_letter(ci)].width = 18
-
-        # Sheet 2: 未分发网易云达人
-        if result.no_netease_totals:
-            ws2 = wb.create_sheet('未分发网易云达人')
-            ws2.merge_cells('A1:F1')
-            ws2.cell(row=1, column=1, value='未分发网易云音乐达人 — 本应结算金额（因不满足分发条件不予结算）').font = sf
-            for c in range(1, 7): ws2.cell(row=1, column=c).fill = sfil
-
-            row = 3
-            for i, h in enumerate(['创作匠ID', '昵称', '投稿平台', '合格稿件数', '本应结算金额', '封顶前金额']):
-                wc(ws2, row, 1+i, h, font=bf,
-                   fill=PatternFill(start_color='FFC000', end_color='FFC000', fill_type='solid'))
-            row += 1
-
-            sorted_nn = sorted(result.no_netease_totals.items(), key=lambda x: x[1]['total'], reverse=True)
-            for cid, data in sorted_nn:
-                platforms = list(data.keys()) if isinstance(data, dict) else []
-                wc(ws2, row, 1, cid)
-                wc(ws2, row, 2, data['昵称'])
-                wc(ws2, row, 3, ', '.join([k for k in data.keys() if k not in ('昵称', 'total', 'before')]))
-                # count posts
-                nn_count = len(result.no_netease_posts[result.no_netease_posts[self.config.creator_id_field] == cid])
-                wc(ws2, row, 4, nn_count)
-                wc(ws2, row, 5, data['total'], fmt=mf, font=bf)
-                wc(ws2, row, 6, data['before'], fmt=mf)
+        # Sheet 2: 计算过程
+        if include_details and result.creator_details:
+            ws2 = wb.create_sheet('计算过程'); row = 1
+            section(ws2, row, 1, 6, '达人结算计算明细'); row += 1
+            for cid, detail in sorted(result.creator_details.items(), key=lambda x: x[1].total, reverse=True):
+                wc(ws2, row, 1, cid, font=bf); wc(ws2, row, 2, detail.name, font=bf)
+                wc(ws2, row, 3, f"\u00a5{detail.total:,.0f}", font=bf); row += 1
+                for bd in detail.breakdown:
+                    wc(ws2, row, 1, bd['label'], font=Font(name='微软雅黑', bold=True, size=10, color='4472C4'))
+                    wc(ws2, row, 2, f"\u00a5{bd['小计']:,.0f}"); row += 1
+                    for item in bd.get('items', []):
+                        t = item.get('type', '')
+                        if t == '爆款奖':
+                            wc(ws2, row, 2, f"爆款 {item.get('作品ID','')[-8:]}")
+                            wc(ws2, row, 3, f"{item.get('点赞','')}赞"); wc(ws2, row, 4, f"\u00a5{item['award']:,.0f}")
+                        elif t == '累计奖':
+                            likes = '+'.join(str(p.get('点赞','')) for p in item.get('cum_posts', [])[:6])
+                            wc(ws2, row, 2, '累计奖'); wc(ws2, row, 3, f"{item.get('cum_likes',0)}赞 ({likes})")
+                            wc(ws2, row, 4, f"\u00a5{item['award']:,.0f}")
+                        elif t in ('阶梯奖', '分发奖'):
+                            pl = item.get('播放量', item.get('点赞', ''))
+                            wc(ws2, row, 2, f"{item.get('作品ID','')[-8:]}"); wc(ws2, row, 3, f"{pl:,}")
+                            wc(ws2, row, 4, f"\u00a5{item['award']:,.0f}")
+                        wc(ws2, row, 5, item.get('tier','')); row += 1
                 row += 1
+            for ci in range(1, 7): ws2.column_dimensions[get_column_letter(ci)].width = 22
 
-            for ci, w in enumerate([18, 18, 26, 12, 16, 16]):
-                ws2.column_dimensions[get_column_letter(ci+1)].width = w
+        # Sheet 3: 底表
+        if result.raw_data is not None:
+            ws3 = wb.create_sheet('底表')
+            for ci, cn in enumerate(result.raw_data.columns): wc(ws3, 1, ci+1, str(cn), font=bf)
+            for ri in range(min(len(result.raw_data), 2000)):
+                for ci in range(len(result.raw_data.columns)):
+                    val = result.raw_data.iloc[ri, ci]
+                    if pd.isna(val): continue
+                    try: wc(ws3, ri+2, ci+1, val)
+                    except: pass
+
+        # Sheet 4: 未分发网易云
+        if result.no_netease_totals:
+            ws4 = wb.create_sheet('未分发网易云达人')
+            section(ws4, 1, 1, 6, '未分发网易云达人 — 本应结算金额'); row = 3
+            for i, h in enumerate(['创作匠ID', '昵称', '投稿平台', '过审稿件数', '本应结算金额', '封顶前金额']):
+                wc(ws4, row, 1+i, h, font=bf, fill=ofil)
+            row += 1
+            for cid, data in sorted(result.no_netease_totals.items(), key=lambda x: x[1]['total'], reverse=True):
+                if data['total'] <= 0: continue
+                wc(ws4, row, 1, cid); wc(ws4, row, 2, data['昵称'])
+                wc(ws4, row, 3, ', '.join(k for k in data.keys() if k not in ('昵称', 'total', 'before')))
+                nn = result.no_netease_posts[result.no_netease_posts[cfg.creator_id_field] == cid] if result.no_netease_posts is not None else pd.DataFrame()
+                wc(ws4, row, 4, len(nn)); wc(ws4, row, 5, data['total'], fmt=mf, font=bf)
+                wc(ws4, row, 6, data['before'], fmt=mf); row += 1
+            for ci, w in enumerate([18, 18, 26, 12, 16, 16], 1): ws4.column_dimensions[get_column_letter(ci)].width = w
 
         wb.save(output_path)
         return output_path
 
 
-# ============================================================
-# 便捷函数
-# ============================================================
-def quick_settle(data_path: str, output_path: Optional[str] = None, cap: int = 10000) -> SettlementResult:
-    """一键结算：加载底表 → 计算 → 返回结果"""
-    engine = SettlementEngine(SettlementConfig(cap_per_person=cap))
-    engine.load_data(data_path)
-    result = engine.calculate()
-    if output_path:
-        engine.to_excel(output_path)
-    return result

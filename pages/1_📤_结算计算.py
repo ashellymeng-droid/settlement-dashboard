@@ -19,7 +19,8 @@ if 'result' not in st.session_state:
 with st.sidebar:
     st.subheader("⚙️ 结算规则配置")
     cap = st.number_input("单人金额上限（元）", value=10000, step=500)
-    month = st.selectbox("任务月份", ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"], index=4)
+    month = st.selectbox("📅 任务月份", ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"], index=5,
+                         help="⚠️ 请确认选择正确的月份！导出的文件名和结算月份以此为准")
     st.markdown("---")
     st.caption("播放量字段优先级:")
     st.caption("`7日播放量` → `7日播放量(三方)`")
