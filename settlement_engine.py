@@ -511,7 +511,7 @@ class SettlementEngine:
         # Sheet 1: 结算明细
         ws1 = wb.active; ws1.title = '结算明细'
         ws1.merge_cells('A1:H1')
-        ws1.cell(row=1, column=1, value=f'歌单推广任务结算 — {s["awarded_creators"]}人 \u00a5{s["grand_total"]:,.0f}').font = Font(name='微软雅黑', bold=True, size=14)
+        ws1.cell(row=1, column=1, value=f'歌单推广任务结算 — {s["awarded_creators"]}人 ¥{s["grand_total"]:,.0f}').font = Font(name='微软雅黑', bold=True, size=14)
         row = 3; section(ws1, row, 1, 8, '创作者结算汇总'); row += 1
         for i, h in enumerate(['创作匠ID', '昵称', '小红书', '抖音', '快手', 'B站/视频号', '结算金额', '封顶前']):
             wc(ws1, row, 1+i, h, font=bf)
@@ -521,7 +521,7 @@ class SettlementEngine:
             for pi, p in enumerate(['小红书', '抖音', '快手', 'B站/视频号']):
                 wc(ws1, row, 3+pi, data.get(p, 0), fmt=mf)
             wc(ws1, row, 7, data['total'], fmt=mf, font=bf)
-            wc(ws1, row, 8, f"\u00a5{data['before']:,.0f}" + (' \U0001f512封顶' if data['before'] > cfg.cap_per_person else '')); row += 1
+            wc(ws1, row, 8, f"¥{data['before']:,.0f}" + (' 🔒封顶' if data['before'] > cfg.cap_per_person else '')); row += 1
         wc(ws1, row, 1, '', font=bf); wc(ws1, row, 2, '合计', font=bf)
         for pi, p in enumerate(['小红书', '抖音', '快手', 'B站/视频号']):
             wc(ws1, row, 3+pi, sum(d.get(p, 0) for _, d in sorted_c), fmt=mf, font=bf)
@@ -529,7 +529,7 @@ class SettlementEngine:
         section(ws1, row, 1, 8, '整体数据统计'); row += 1
         cpm = s['grand_total'] / s['estimated_exposure'] * 1000 if s.get('estimated_exposure', 0) > 0 else 0
         cpe = s['grand_total'] / s['total_interact'] if s.get('total_interact', 0) > 0 else 0
-        for label, value in [('获奖人数', f'{s["awarded_creators"]}人'), ('封顶前/结算总金额', f'\u00a5{s["grand_before"]:,.0f} / \u00a5{s["grand_total"]:,.0f}'), ('封顶人数', f'{s["capped_count"]}人'), ('过审条数', str(s.get("guoshen_count",""))), ('预估曝光cpm/CPE', f'{cpm:.2f} / {cpe:.2f}')]:
+        for label, value in [('获奖人数', f'{s["awarded_creators"]}人'), ('封顶前/结算总金额', f'¥{s["grand_before"]:,.0f} / ¥{s["grand_total"]:,.0f}'), ('封顶人数', f'{s["capped_count"]}人'), ('过审条数', str(s.get("guoshen_count",""))), ('预估曝光cpm/CPE', f'{cpm:.2f} / {cpe:.2f}')]:
             wc(ws1, row, 1, '', font=bf); ws1.merge_cells(start_row=row, start_column=2, end_row=row, end_column=4)
             wc(ws1, row, 2, label, font=bf, align=la); ws1.merge_cells(start_row=row, start_column=5, end_row=row, end_column=6)
             wc(ws1, row, 5, value); row += 1
@@ -541,23 +541,23 @@ class SettlementEngine:
             section(ws2, row, 1, 6, '达人结算计算明细'); row += 1
             for cid, detail in sorted(result.creator_details.items(), key=lambda x: x[1].total, reverse=True):
                 wc(ws2, row, 1, cid, font=bf); wc(ws2, row, 2, detail.name, font=bf)
-                wc(ws2, row, 3, f"\u00a5{detail.total:,.0f}", font=bf); row += 1
+                wc(ws2, row, 3, f"¥{detail.total:,.0f}", font=bf); row += 1
                 for bd in detail.breakdown:
                     wc(ws2, row, 1, bd['label'], font=Font(name='微软雅黑', bold=True, size=10, color='4472C4'))
-                    wc(ws2, row, 2, f"\u00a5{bd['小计']:,.0f}"); row += 1
+                    wc(ws2, row, 2, f"¥{bd['小计']:,.0f}"); row += 1
                     for item in bd.get('items', []):
                         t = item.get('type', '')
                         if t == '爆款奖':
                             wc(ws2, row, 2, f"爆款 {item.get('作品ID','')[-8:]}")
-                            wc(ws2, row, 3, f"{item.get('点赞','')}赞"); wc(ws2, row, 4, f"\u00a5{item['award']:,.0f}")
+                            wc(ws2, row, 3, f"{item.get('点赞','')}赞"); wc(ws2, row, 4, f"¥{item['award']:,.0f}")
                         elif t == '累计奖':
                             likes = '+'.join(str(p.get('点赞','')) for p in item.get('cum_posts', [])[:6])
                             wc(ws2, row, 2, '累计奖'); wc(ws2, row, 3, f"{item.get('cum_likes',0)}赞 ({likes})")
-                            wc(ws2, row, 4, f"\u00a5{item['award']:,.0f}")
+                            wc(ws2, row, 4, f"¥{item['award']:,.0f}")
                         elif t in ('阶梯奖', '分发奖'):
                             pl = item.get('播放量', item.get('点赞', ''))
                             wc(ws2, row, 2, f"{item.get('作品ID','')[-8:]}"); wc(ws2, row, 3, f"{pl:,}")
-                            wc(ws2, row, 4, f"\u00a5{item['award']:,.0f}")
+                            wc(ws2, row, 4, f"¥{item['award']:,.0f}")
                         wc(ws2, row, 5, item.get('tier','')); row += 1
                 row += 1
             for ci in range(1, 7): ws2.column_dimensions[get_column_letter(ci)].width = 22
