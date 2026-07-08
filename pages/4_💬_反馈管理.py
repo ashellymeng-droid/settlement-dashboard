@@ -1,9 +1,7 @@
 """Page 4: 反馈管理 — 达人问题反馈追踪"""
 import streamlit as st
 import pandas as pd
-import sys, os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 st.title("💬 反馈管理")
 st.caption("达人问题反馈追踪 & 处理状态管理")

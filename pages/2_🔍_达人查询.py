@@ -1,9 +1,7 @@
 """Page 2: 达人查询 — 按创作匠ID搜索结算明细"""
 import streamlit as st
 import pandas as pd
-import sys, os
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from settlement_engine import SettlementEngine
 
 st.title("🔍 达人结算明细查询")

@@ -1,9 +1,8 @@
 """Page 1: 数据导入 & 结算计算"""
 import streamlit as st
 import pandas as pd
-import sys, os, time
+import os, time
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from settlement_engine import SettlementEngine, SettlementConfig, quick_settle
 
 st.title("📤 数据导入 & 结算计算")
