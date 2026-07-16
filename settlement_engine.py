@@ -108,21 +108,22 @@ class SettlementEngine:
         self.result = SettlementResult(config=self.config)
 
     @staticmethod
-    def apply_tier(value: float, tiers: List[Tuple[float, float]]) -> float:
-        """阶梯定价：找到最高匹配档位"""
+    def apply_tier(value: float, tiers: List[Tuple[float, float]], inclusive: bool = False) -> float:
+        """阶梯定价：找到最高匹配档位。inclusive=True 时用 >= (爆款奖规则)，否则用 > (累计奖规则)"""
         amount = 0
         for threshold, reward in tiers:
-            if value > threshold:
+            if (value >= threshold) if inclusive else (value > threshold):
                 amount = reward
         return amount
 
     @staticmethod
-    def get_tier_label(value: float, tiers: List[Tuple[float, float]]) -> str:
+    def get_tier_label(value: float, tiers: List[Tuple[float, float]], inclusive: bool = False) -> str:
         """获取命中的档位标签"""
         label = "未达标"
+        op = "≥" if inclusive else ">"
         for threshold, reward in tiers:
-            if value > threshold:
-                label = f">{threshold:,}→¥{reward}"
+            if (value >= threshold) if inclusive else (value > threshold):
+                label = f"{op}{threshold:,}→¥{reward}"
         return label
 
     def load_data(self, path: str) -> pd.DataFrame:
@@ -329,16 +330,16 @@ class SettlementEngine:
         items = []
         boom_total = 0.0
 
-        # 爆款奖
+        # 爆款奖（≥ 判定）
         for _, p in boom.iterrows():
-            amt = self.apply_tier(p[cfg.like_field], boom_tiers)
+            amt = self.apply_tier(p[cfg.like_field], boom_tiers, inclusive=True)
             if amt > 0:
                 items.append({
                     '作品ID': str(int(p[cfg.post_id_field])),
                     '点赞': int(p[cfg.like_field]),
                     'award': amt,
                     'type': '爆款奖',
-                    'tier': self.get_tier_label(p[cfg.like_field], boom_tiers),
+                    'tier': self.get_tier_label(p[cfg.like_field], boom_tiers, inclusive=True),
                 })
                 boom_total += amt
 
