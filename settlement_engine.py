@@ -54,6 +54,24 @@ SETTLEMENT_RULES = {
     },
 }
 
+# 8月前旧规则：仅小红书爆款奖不同（含5千档，无2万档）
+SETTLEMENT_RULES_OLD = {
+    **SETTLEMENT_RULES,
+    "小红书": {
+        **SETTLEMENT_RULES["小红书"],
+        "真人": {
+            **SETTLEMENT_RULES["小红书"]["真人"],
+            "boom": [(5000, 3000), (10000, 4000)],
+            "boom_threshold": 5000,
+        },
+        "图文": {
+            **SETTLEMENT_RULES["小红书"]["图文"],
+            "boom": [(5000, 2000), (10000, 3000)],
+            "boom_threshold": 5000,
+        },
+    },
+}
+
 
 @dataclass
 class SettlementConfig:
@@ -71,6 +89,7 @@ class SettlementConfig:
     creator_name_field: str = "创作匠/易闪昵称"
     post_id_field: str = "作品ID"
     netease_platform: str = "网易云音乐"
+    use_old_rules: bool = False  # True=8月前旧规则（爆款奖含5千档），7月及以前月份用
 
 
 @dataclass
@@ -251,7 +270,7 @@ class SettlementEngine:
             raise ValueError("请先调用 load_data() 加载底表")
 
         cfg = self.config
-        rules = SETTLEMENT_RULES
+        rules = SETTLEMENT_RULES_OLD if cfg.use_old_rules else SETTLEMENT_RULES
 
         # 过滤非网易云 + 可结算
         valid_pool = df[
@@ -623,9 +642,10 @@ class SettlementEngine:
         return output_path
 
 
-def quick_settle(data_path: str, output_path: Optional[str] = None, cap: int = 10000) -> SettlementResult:
-    """一键结算：加载底表 → 计算 → 返回结果"""
-    engine = SettlementEngine(SettlementConfig(cap_per_person=cap))
+def quick_settle(data_path: str, output_path: Optional[str] = None, cap: int = 10000,
+                 use_old_rules: bool = False) -> SettlementResult:
+    """一键结算：加载底表 → 计算 → 返回结果。use_old_rules=True 用8月前旧规则"""
+    engine = SettlementEngine(SettlementConfig(cap_per_person=cap, use_old_rules=use_old_rules))
     engine.load_data(data_path)
     result = engine.calculate()
     if output_path:

@@ -20,6 +20,12 @@ with st.sidebar:
     cap = st.number_input("单人金额上限（元）", value=10000, step=500)
     month = st.selectbox("📅 任务月份", ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"], index=5,
                          help="⚠️ 请确认选择正确的月份！导出的文件名和结算月份以此为准")
+    month_num = int(month.replace("月", ""))
+    rule_options = ["新规则（8月起：爆款≥1w起，新增2w档）", "旧规则（7月及以前：爆款含≥5k档）"]
+    rule_default = 1 if month_num <= 7 else 0
+    rule_choice = st.selectbox("📏 结算规则版本", rule_options, index=rule_default,
+                               help="7月及以前的月份默认旧规则；8月起默认新规则，可手动切换")
+    use_old_rules = rule_choice.startswith("旧规则")
     st.markdown("---")
     st.caption("播放量字段优先级:")
     st.caption("`7日播放量` → `7日播放量(三方)`")
@@ -70,7 +76,7 @@ with calc_col2:
                 tmp_path = tmp.name
 
             # Run settlement
-            engine = SettlementEngine(SettlementConfig(cap_per_person=cap))
+            engine = SettlementEngine(SettlementConfig(cap_per_person=cap, use_old_rules=use_old_rules))
             engine.load_data(tmp_path)
             result = engine.calculate()
 
