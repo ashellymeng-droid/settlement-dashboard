@@ -88,6 +88,11 @@ with calc_col2:
             try: os.unlink(tmp_path)
             except: pass
 
+            missing = result.stats.get('missing_cols', [])
+            if missing:
+                st.warning("⚠️ 底表缺少以下列，已按默认值处理："
+                           + "、".join(missing)
+                           + "（其中「稿件内容标签」缺失时全部按“未分类”结算）")
             st.success(f"✅ 结算完成！耗时 {elapsed:.1f} 秒")
 
 # --- Results ---

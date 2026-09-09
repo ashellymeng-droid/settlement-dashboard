@@ -145,6 +145,16 @@ class SettlementEngine:
                 label = f"{op}{threshold:,}→¥{reward}"
         return label
 
+    @staticmethod
+    def _fmt_post_id(v) -> str:
+        """安全格式化作品ID：兼容 NaN / 浮点 / 字符串"""
+        if pd.isna(v):
+            return ''
+        try:
+            return str(int(v))
+        except (ValueError, TypeError):
+            return str(v)
+
     def load_data(self, path: str) -> pd.DataFrame:
         """加载并清洗底表数据"""
         df = pd.read_excel(path, sheet_name='底表') if '底表' in \
@@ -152,6 +162,26 @@ class SettlementEngine:
 
         cfg = self.config
         df = df.copy()
+
+        # 容错：底表缺失的列补齐默认值，避免列名不齐全时报 KeyError
+        _default_cols = {
+            cfg.access_field: '是',
+            cfg.review_field: '',
+            cfg.content_tag_field: '未分类',
+            cfg.platform_field: '',
+            cfg.creator_id_field: '',
+            cfg.creator_name_field: '',
+            cfg.post_id_field: '',
+            cfg.play_field: np.nan,
+            cfg.play_fallback_field: np.nan,
+            cfg.like_field: np.nan,
+            cfg.interact_field: np.nan,
+        }
+        missing_cols = [col for col in _default_cols if col and col not in df.columns]
+        for col, default in _default_cols.items():
+            if col and col not in df.columns:
+                df[col] = default
+
         df.loc[:, cfg.access_field] = df[cfg.access_field].fillna('是')
         df.loc[:, '_can_settle'] = (
             (df[cfg.review_field] == '审核通过') &
@@ -171,6 +201,7 @@ class SettlementEngine:
         self.result.stats['total_rows'] = len(df)
         self.result.stats['netease_rows'] = int((df[cfg.platform_field] == cfg.netease_platform).sum())
         self.result.stats['netease_creators'] = len(netease_creators)
+        self.result.stats['missing_cols'] = missing_cols
 
         return df
 
@@ -354,7 +385,7 @@ class SettlementEngine:
             amt = self.apply_tier(p[cfg.like_field], boom_tiers, inclusive=True)
             if amt > 0:
                 items.append({
-                    '作品ID': str(int(p[cfg.post_id_field])),
+                    '作品ID': self._fmt_post_id(p[cfg.post_id_field]),
                     '点赞': int(p[cfg.like_field]),
                     'award': amt,
                     'type': '爆款奖',
@@ -370,7 +401,7 @@ class SettlementEngine:
             for _, p in non_boom.head(10).iterrows():
                 if pd.notna(p[cfg.like_field]) and p[cfg.like_field] > 0:
                     cum_posts.append({
-                        '作品ID': str(int(p[cfg.post_id_field])),
+                        '作品ID': self._fmt_post_id(p[cfg.post_id_field]),
                         '点赞': int(p[cfg.like_field]),
                     })
             items.append({
@@ -398,7 +429,7 @@ class SettlementEngine:
         for _, r in p.iterrows():
             amt = self.apply_tier(r['_play'], tiers)
             items.append({
-                '作品ID': str(int(r[cfg.post_id_field])),
+                '作品ID': self._fmt_post_id(r[cfg.post_id_field]),
                 '播放量': int(r['_play']),
                 'award': amt,
                 'type': '阶梯奖',
@@ -416,7 +447,7 @@ class SettlementEngine:
         for _, r in p.iterrows():
             amt = self.apply_tier(r[cfg.like_field], tiers)
             items.append({
-                '作品ID': str(int(r[cfg.post_id_field])),
+                '作品ID': self._fmt_post_id(r[cfg.post_id_field]),
                 '平台': r[cfg.platform_field],
                 '点赞': int(r[cfg.like_field]),
                 'award': amt,
