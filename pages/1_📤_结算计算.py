@@ -129,19 +129,21 @@ if st.session_state.result is not None:
     st.markdown("---")
     st.subheader("📋 公示前审核报告")
 
-    df_raw = st.session_state.engine.result.raw_data
-    guoshen = df_raw[(df_raw['发布平台'] != '网易云音乐') & (df_raw['_can_settle'])]
-    total_non_ne = len(df_raw[df_raw['发布平台'] != '网易云音乐'])
-    xhs_all = len(df_raw[df_raw['发布平台'] == '小红书'])
-    xhs_gs = len(guoshen[guoshen['发布平台'] == '小红书'])
+    engine = st.session_state.engine
+    cfg = engine.config
+    df_raw = engine.result.raw_data
+    guoshen = df_raw[(df_raw[cfg.platform_field] != cfg.netease_platform) & (df_raw['_can_settle'])]
+    total_non_ne = len(df_raw[df_raw[cfg.platform_field] != cfg.netease_platform])
+    xhs_all = len(df_raw[df_raw[cfg.platform_field] == '小红书'])
+    xhs_gs = len(guoshen[guoshen[cfg.platform_field] == '小红书'])
     awarded_p = len([item for d in result.creator_details.values() for bd in d.breakdown for item in bd.get('items', []) if item.get('award', 0) > 0])
-    boom_1k = int((guoshen['7日点赞量'] >= 1000).sum())
+    boom_1k = int((guoshen[cfg.like_field] >= 1000).sum())
 
-    xhs_p = guoshen[guoshen['发布平台'] == '小红书']['7日播放量'].sum()
-    other_p = guoshen[~guoshen['发布平台'].isin(['小红书'])]['_play'].sum()
+    xhs_p = guoshen[guoshen[cfg.platform_field] == '小红书'][cfg.play_field].sum()
+    other_p = guoshen[~guoshen[cfg.platform_field].isin(['小红书'])]['_play'].sum()
     est_e = (xhs_p if pd.notna(xhs_p) else 0) * 4 + (other_p if pd.notna(other_p) else 0)
-    total_int = int(guoshen['7日互动量'].sum())
-    total_ppl = df_raw[df_raw['发布平台'] != '网易云音乐']['创作匠/易闪ID'].nunique()
+    total_int = int(s['total_interact'])
+    total_ppl = df_raw[df_raw[cfg.platform_field] != cfg.netease_platform][cfg.creator_id_field].nunique()
     cpm_v = s['grand_total'] / est_e * 1000 if est_e > 0 else 0
     cpe_v = s['grand_total'] / total_int if total_int > 0 else 0
     boom_r = boom_1k / len(guoshen) if len(guoshen) > 0 else 0
