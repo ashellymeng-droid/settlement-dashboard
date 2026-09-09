@@ -163,6 +163,13 @@ class SettlementEngine:
         cfg = self.config
         df = df.copy()
 
+        # 字段自动适配：8月起底表把「7日互动量」改成了「互动量」/「结算互动量(三方)」
+        if cfg.interact_field not in df.columns:
+            for cand in ['互动量', '结算互动量(三方)']:
+                if cand in df.columns:
+                    cfg.interact_field = cand
+                    break
+
         # 容错：底表缺失的列补齐默认值，避免列名不齐全时报 KeyError
         _default_cols = {
             cfg.access_field: '是',
