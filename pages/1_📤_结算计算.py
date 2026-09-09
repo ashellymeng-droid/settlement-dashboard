@@ -18,8 +18,8 @@ if 'result' not in st.session_state:
 with st.sidebar:
     st.subheader("⚙️ 结算规则配置")
     cap = st.number_input("单人金额上限（元）", value=10000, step=500)
-    month = st.selectbox("📅 任务月份", ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"], index=5,
-                         help="⚠️ 请确认选择正确的月份！导出的文件名和结算月份以此为准")
+    month = st.selectbox("📅 任务月份", ["1月","2月","3月","4月","5月","6月","7月","8月","9月","10月","11月","12月"], index=7,
+                         help="⚠️ 请确认选择正确的月份！导出的文件名和结算月份以此为准（8月起默认新规则）")
     month_num = int(month.replace("月", ""))
     rule_options = ["新规则（8月起：爆款≥1w起，新增2w档）", "旧规则（7月及以前：爆款含≥5k档）"]
     rule_default = 1 if month_num <= 7 else 0
